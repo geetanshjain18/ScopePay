@@ -1,0 +1,51 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {mkdtempSync,cpSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,resolve,relative} from 'node:path';
+import {openStorage} from '../storage.js';
+
+test('accounts API isolates work, protects mutations and persists sessions after restart',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'scopepay-auth-test-'));
+ for(const file of ['package.json','deployment.js','server.js','domain.js','payments.js','storage.js','auth.js','public'])cpSync(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
+ const launch=()=>spawn(process.execPath,['server.js'],{cwd:dir,env:{...process.env,PORT:'4174',GEMINI_API_KEY:'',PAYPAL_CLIENT_ID:'',PAYPAL_CLIENT_SECRET:''},stdio:['ignore','pipe','pipe']});
+ const ready=child=>new Promise((ok,no)=>{child.stdout.on('data',d=>{if(d.toString().includes('ScopePay:'))ok()});child.once('error',no);child.once('exit',c=>no(Error('Server exited '+c)));setTimeout(()=>no(Error('Startup timeout')),10000).unref()});
+ const stop=async child=>{if(child.exitCode===null&&!child.killed){const done=new Promise(ok=>child.once('exit',ok));child.kill();await done}};
+ let child=launch();let ownerCookie;
+ const base='http://127.0.0.1:4174';
+ const call=async(path,body,cookie=ownerCookie)=>{const r=await fetch(base+'/api/'+path,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});return [r.status,await r.json(),r.headers.get('set-cookie')?.split(';')[0]]};
+ try{
+  await ready(child);
+  let [status]=await call('state');assert.equal(status,401);
+  const home=await fetch(base);assert.equal(home.headers.get('set-cookie'),null);
+  let owner,cookie;[status,owner,cookie]=await call('auth/signup',{name:'Owner',email:'owner@example.test',password:'Test password for owner 123!',hourlyRate:'20'});assert.equal(status,201);ownerCookie=cookie;assert.ok(cookie.startsWith('scopepay_session='));assert.equal(owner.user.role,'owner');
+  let project;[status,project]=await call('projects',{name:'Real project',client:'Client',scope:'Three pages. Booking excluded.'});assert.equal(status,201);assert.equal(project.hourlyRate,2000);
+  let sample;[status,sample]=await call('sample',{});assert.equal(status,200);
+  [status]=await call('proposals',{pricingApproved:true,reviewId:sample.review.id,items:[{index:0,amount:'5'}],message:'No'});assert.equal(status,400);
+  let proposal;[status,proposal]=await call('proposals',{pricingApproved:true,reviewId:sample.review.id,items:[{index:1,amount:'60.15'}],message:'Sample approval'});assert.equal(status,201);
+  let publicData;[status,publicData]=await call('client/'+proposal.token,undefined,null);assert.equal(status,200);assert.equal(publicData.proposal.token,undefined);assert.equal(publicData.proposal.cents,6015);
+  [status]=await call('client/'+proposal.token+'/accept',{accepted:true},null);assert.equal(status,200);
+  [status]=await call('client/'+proposal.token+'/order',{},null);assert.equal(status,400);
+  [status]=await call('review',{projectId:project.id,request:'Add booking'});assert.equal(status,400);
+  const db=openStorage(join(dir,'data','scopepay.db'));
+  const pricing={suggestedCents:5000,estimatedHours:2.5,hourlyRate:2000,assumptions:['Existing design'],tasks:[{name:'Build',hours:2.5,basis:'Reuse layout'}]};
+  db.put('review',{id:'priced-review',projectId:project.id,demo:false,request:'FAQ',findings:[{title:'FAQ page',status:'extra',pricing}]},owner.user.id);db.db.close();
+  let quote;[status,quote]=await call('proposals',{reviewId:'priced-review',pricingApproved:true,items:[{index:0,amount:'1.00'}],message:'Real quote'});assert.equal(status,201);assert.equal(quote.cents,5000);assert.equal(quote.reviewId,'priced-review');
+  let memberCookie;[status,,memberCookie]=await call('auth/signup',{name:'Other user',email:'member@example.test',password:'Test password for member 456!'},null);assert.equal(status,201);
+  let memberState;[status,memberState]=await call('state',undefined,memberCookie);assert.equal(memberState.projects.length,0);assert.equal(memberState.proposals.length,0);assert.equal(memberState.reviews.length,0);
+  [status]=await call('review',{projectId:project.id,request:'Steal data'},memberCookie);assert.equal(status,404);
+  [status]=await call('proposals',{reviewId:'priced-review',pricingApproved:true,items:[{index:0}],message:'Steal'},memberCookie);assert.equal(status,404);
+  [status]=await call('connections/check',{provider:'paypal'},memberCookie);assert.equal(status,403);
+  let exportData;[status,exportData]=await call('account/export',undefined,memberCookie);assert.equal(exportData.projects.length,0);assert.equal(exportData.user.password_hash,undefined);
+  [status]=await call('connections/check',{provider:'paypal'});assert.equal(status,400);
+  const cross=await fetch(base+'/api/projects',{method:'POST',headers:{cookie:ownerCookie,'Content-Type':'application/json',Origin:'https://untrusted.example'},body:JSON.stringify({name:'Cross origin'})});assert.equal(cross.status,400);
+  [status]=await call('profile',{name:'Updated Owner',hourlyRate:'35'});assert.equal(status,200);
+  await stop(child);child=launch();await ready(child);
+  let persisted;[status,persisted]=await call('state');assert.equal(status,200);assert.equal(persisted.user.name,'Updated Owner');assert.equal(persisted.user.hourlyRate,3500);assert.equal(persisted.projects.length,2);assert.equal(persisted.proposals.length,2);assert.equal(persisted.proposals.find(p=>p.id===quote.id).cents,5000);assert.equal(persisted.projects.find(p=>p.id===project.id).hourlyRate,2000);
+  [status]=await call('auth/logout',{});assert.equal(status,200);[status]=await call('state');assert.equal(status,401);
+  [status]=await call('auth/login',{email:'owner@example.test',password:'incorrect'},null);assert.equal(status,401);
+  [status,,ownerCookie]=await call('auth/login',{email:'owner@example.test',password:'Test password for owner 123!'},null);assert.equal(status,200);
+  const db2=openStorage(join(dir,'data','scopepay.db'));assert.equal(db2.db.prepare('PRAGMA foreign_key_check').all().length,0);assert.equal(db2.db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');db2.db.close();
+ }finally{await stop(child);const cleanupRelative=relative(resolve(tmpdir()),resolve(dir));if(cleanupRelative.startsWith('..')||!cleanupRelative.startsWith('scopepay-auth-test-'))throw Error('Unexpected cleanup path');rmSync(dir,{recursive:true,force:true});}
+});

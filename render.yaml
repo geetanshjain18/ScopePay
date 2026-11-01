@@ -1,0 +1,34 @@
+# Paid single-instance service: review Render's estimate before deploying.
+# The SQLite database must remain on this persistent disk.
+services:
+  - type: web
+    name: scopepay
+    runtime: node
+    region: singapore
+    plan: 0.5c-512mb
+    numInstances: 1
+    buildCommand: npm run check
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    disk:
+      name: scopepay-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: DATA_DIR
+        value: /var/data
+      - key: OWNER_SETUP_TOKEN
+        generateValue: true
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false

@@ -1,0 +1,28 @@
+# Private environment configuration; keep only the empty template
+.env
+.env.*
+!.env.example
+
+# User accounts, sessions, projects and payment records
+/data/
+/backups/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# Generated files and local tooling
+node_modules/
+outputs/
+work/
+coverage/
+.nyc_output/
+*.log
+*.zip
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.codex/
