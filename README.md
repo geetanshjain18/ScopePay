@@ -37,7 +37,7 @@ Edit `.env` privately:
 | Variable | Purpose |
 | --- | --- |
 | `GEMINI_API_KEY` | Server-side AI requests |
-| `GEMINI_MODEL` | Model identifier; defaults to `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Model identifier; defaults to `gemini-3.5-flash-lite` |
 | `PAYPAL_CLIENT_ID` | PayPal sandbox application client ID |
 | `PAYPAL_CLIENT_SECRET` | Server-side PayPal sandbox secret |
 | `PORT` | Local HTTP port; default 4173 |
