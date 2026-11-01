@@ -9,7 +9,7 @@ import {openStorage} from '../storage.js';
 test('accounts API isolates work, protects mutations and persists sessions after restart',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'scopepay-auth-test-'));
  for(const file of ['package.json','deployment.js','server.js','domain.js','payments.js','storage.js','auth.js','public'])cpSync(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
- const launch=()=>spawn(process.execPath,['server.js'],{cwd:dir,env:{...process.env,PORT:'4174',GEMINI_API_KEY:'',PAYPAL_CLIENT_ID:'',PAYPAL_CLIENT_SECRET:''},stdio:['ignore','pipe','pipe']});
+ const launch=()=>spawn(process.execPath,['server.js'],{cwd:dir,env:{...process.env,DATABASE_URL:'',FREE_HOSTING:'',PORT:'4174',GEMINI_API_KEY:'',PAYPAL_CLIENT_ID:'',PAYPAL_CLIENT_SECRET:''},stdio:['ignore','pipe','pipe']});
  const ready=child=>new Promise((ok,no)=>{child.stdout.on('data',d=>{if(d.toString().includes('ScopePay:'))ok()});child.once('error',no);child.once('exit',c=>no(Error('Server exited '+c)));setTimeout(()=>no(Error('Startup timeout')),10000).unref()});
  const stop=async child=>{if(child.exitCode===null&&!child.killed){const done=new Promise(ok=>child.once('exit',ok));child.kill();await done}};
  let child=launch();let ownerCookie;

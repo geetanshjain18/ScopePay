@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {deploymentConfig} from '../deployment.js';
 import {resolve} from 'node:path';
+import {readFileSync} from 'node:fs';
 
 const root=resolve('fixture');
 const hosted={NODE_ENV:'production',PORT:'10000',PUBLIC_URL:'https://scopepay.example',DATA_DIR:resolve('persistent-disk'),OWNER_SETUP_TOKEN:'x'.repeat(40)};
@@ -31,4 +32,17 @@ test('hosted startup uses the Render HTTPS origin, persistent storage and secure
 test('hosted startup rejects missing storage, weak setup protection and insecure origins',()=>{
  for(const override of [{DATA_DIR:''},{DATA_DIR:'relative'},{OWNER_SETUP_TOKEN:''},{PUBLIC_URL:'http://scopepay.example'},{PUBLIC_URL:'https://scopepay.example/path'},{PUBLIC_URL:'https://user:pass@scopepay.example'},{PORT:'bad'}])assert.throws(()=>deploymentConfig({...hosted,...override},root));
  assert.throws(()=>deploymentConfig({...hosted,PUBLIC_URL:''},root));
+});
+
+
+test('free hosted mode refuses ephemeral SQLite and uses an external PostgreSQL URL',()=>{
+ assert.throws(()=>deploymentConfig({...hosted,FREE_HOSTING:'true'},root),/DATABASE_URL/);
+ const config=deploymentConfig({...hosted,FREE_HOSTING:'true',DATABASE_URL:'postgresql://example/db',DATA_DIR:''},root);
+ assert.equal(config.hosted,true);
+});
+
+test('the checked-in Render Blueprint cannot provision paid compute or a disk',()=>{
+ const source=readFileSync(new URL('../render.yaml',import.meta.url),'utf8');
+ assert.match(source,/plan: free/);assert.doesNotMatch(source,/^\s*disk:/m);
+ assert.match(source,/key: FREE_HOSTING/);assert.match(source,/key: DATABASE_URL/);
 });

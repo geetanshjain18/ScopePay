@@ -4,12 +4,12 @@ export function paymentService({get,save,provider}) {
   const refreshReads = new Map();
   async function locked(id, action) {
     const prior = locks.get(id) || Promise.resolve();
-    const next = prior.catch(() => {}).then(() => action(get(id)));
+    const next = prior.catch(() => {}).then(async () => action(await get(id)));
     locks.set(id, next);
     try { return await next; }
     finally { if (locks.get(id) === next) locks.delete(id); }
   }
-  function reconcile(p, order) {
+  async function reconcile(p, order) {
     if (order.id !== p.order) throw Error('PayPal returned an unexpected order.');
     p.providerStatus = order.status;
     p.lastChecked = new Date().toISOString();
@@ -25,7 +25,7 @@ export function paymentService({get,save,provider}) {
       p.capture = capture.id;
       p.paidAt ||= capture.create_time || new Date().toISOString();
     }
-    save(p);
+    await save(p);
     return p;
   }
   return {
@@ -41,13 +41,13 @@ export function paymentService({get,save,provider}) {
           payment_source:{paypal:{experience_context:{shipping_preference:'NO_SHIPPING'}}}
         }, p.id);
         if (!order.id) throw Error('PayPal did not return an order ID.');
-        p.order=order.id; save(p);
+        p.order=order.id; await save(p);
       } else {
-        reconcile(p, await provider('/v2/checkout/orders/'+p.order));
+        await reconcile(p, await provider('/v2/checkout/orders/'+p.order));
         if(p.status==='paid') return {paid:true};
         if(p.providerStatus==='VOIDED') throw Error('This PayPal order is no longer available. Ask for a new proposal.');
       }
-      if (p.lastCheckout==='cancelled') {p.lastCheckout='resumed';save(p);}
+      if (p.lastCheckout==='cancelled') {p.lastCheckout='resumed';await save(p);}
       return {id:p.order};
     }),
     capture: (id, orderID) => locked(id, async p => {
@@ -65,19 +65,19 @@ export function paymentService({get,save,provider}) {
           if(order.status !== 'COMPLETED') throw error;
         }
       }
-      reconcile(p,order);
+      await reconcile(p,order);
       if(p.status!=='paid') throw Error('Payment is pending. Use Check payment status; do not start another payment.');
       return {paid:true};
     }),
     refresh: (id,{force=false}={}) => locked(id, async p => {
       if(p.order && !p.demo && p.status!=='paid' && (force || Date.now()-(refreshReads.get(id)||0)>=8000)) {
         refreshReads.set(id,Date.now());
-        reconcile(p, await provider('/v2/checkout/orders/'+p.order));
+        await reconcile(p, await provider('/v2/checkout/orders/'+p.order));
       }
       return {paid:p.status==='paid',status:p.status,providerStatus:p.providerStatus||null};
     }),
     cancel: id => locked(id, async p => {
-      if(p.status!=='paid') {p.lastCheckout='cancelled';p.cancelledAt=new Date().toISOString();save(p);}
+      if(p.status!=='paid') {p.lastCheckout='cancelled';p.cancelledAt=new Date().toISOString();await save(p);}
       return {paid:p.status==='paid'};
     })
   };

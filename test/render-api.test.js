@@ -12,7 +12,7 @@ test('hosted owner setup, HTTPS cookies and data survive a new release directory
  const files=['package.json','server.js','deployment.js','domain.js','payments.js','storage.js','auth.js','public','scripts'];
  for(const file of files)cpSync(new URL('../'+file,import.meta.url),join(code,file),{recursive:true});
  const setupToken='render-owner-setup-token-for-isolated-test';
- const env={...process.env,NODE_ENV:'production',RENDER:'true',PORT:'4177',PUBLIC_URL:'https://scopepay.example',DATA_DIR:disk,OWNER_SETUP_TOKEN:setupToken,GEMINI_API_KEY:'',PAYPAL_CLIENT_ID:'',PAYPAL_CLIENT_SECRET:''};
+ const env={...process.env,DATABASE_URL:'',FREE_HOSTING:'',NODE_ENV:'production',RENDER:'true',PORT:'4177',PUBLIC_URL:'https://scopepay.example',DATA_DIR:disk,OWNER_SETUP_TOKEN:setupToken,GEMINI_API_KEY:'',PAYPAL_CLIENT_ID:'',PAYPAL_CLIENT_SECRET:''};
  const launch=cwd=>spawn(process.execPath,['server.js'],{cwd,env,stdio:['ignore','pipe','pipe']});
  const ready=child=>new Promise((ok,no)=>{let errors='';child.stderr.on('data',d=>errors+=d);child.stdout.on('data',d=>{if(d.toString().includes('ScopePay:'))ok()});child.once('error',no);child.once('exit',()=>no(Error(errors||'Server exited before startup')));setTimeout(()=>no(Error('Startup timeout')),10000).unref()});
  const stop=async child=>{if(child&&child.exitCode===null&&!child.killed){const ended=new Promise(ok=>child.once('exit',ok));child.kill();await ended;}};

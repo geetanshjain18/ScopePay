@@ -1,6 +1,7 @@
 import {DatabaseSync} from 'node:sqlite';
 import {mkdirSync,existsSync} from 'node:fs';
 import {resolve} from 'node:path';
+if(process.env.DATABASE_URL)throw Error('This command backs up local SQLite only. Use a private PostgreSQL-native export for cloud data.');
 const dataDir=resolve(process.env.DATA_DIR||'data'),source=resolve(dataDir,'scopepay.db');
 if(!existsSync(source))throw Error('No existing database found. Nothing was backed up.');
 const folder=resolve(dataDir,'backups');mkdirSync(folder,{recursive:true});

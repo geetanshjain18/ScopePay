@@ -12,7 +12,8 @@ export function deploymentConfig(env, root) {
     const url=new URL(publicURL);
     if(url.protocol!=='https:'||url.username||url.password||url.pathname!=='/'||url.search||url.hash)throw Error('The public URL must be an HTTPS origin without a path or credentials.');
     origin=url.origin;
-    if(!env.DATA_DIR||!isAbsolute(env.DATA_DIR))throw Error('Hosted DATA_DIR must point to an absolute persistent-disk directory.');
+    if(env.FREE_HOSTING==='true'&&!env.DATABASE_URL)throw Error('Free hosting requires DATABASE_URL for durable PostgreSQL storage.');
+    if(!env.DATABASE_URL&&(!env.DATA_DIR||!isAbsolute(env.DATA_DIR)))throw Error('Hosted DATA_DIR must point to an absolute persistent-disk directory.');
     if(!env.OWNER_SETUP_TOKEN||env.OWNER_SETUP_TOKEN.length<32)throw Error('Hosted OWNER_SETUP_TOKEN must contain at least 32 characters.');
   }
   const dataDir=resolve(env.DATA_DIR||resolve(root,'data'));

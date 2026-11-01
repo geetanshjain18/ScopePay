@@ -1,47 +1,46 @@
-# Render deployment preparation
+# Free Render deployment
 
-The repository includes a Render Blueprint. Preparing this file does not create a Render service or deploy the application.
+Use **Render Free** for the Node.js web service and **Neon Free** for PostgreSQL. The Blueprint uses `plan: free`, declares no disk, and does not create a paid resource. Do not add billing information or upgrade either provider for this demo.
 
-## Service design
+## Configuration
 
-| Setting | Configuration |
+| Setting | Value |
 | --- | --- |
-| Service | One Node.js web service serving the UI and API |
-| Runtime | Node.js 24 |
-| Build | `npm run check` |
-| Start | `node server.js` |
-| Health check | `/healthz` |
-| Storage | SQLite at `/var/data/scopepay.db` |
-| Persistent disk | 1 GB mounted at `/var/data` |
-| Instances | One; disk-backed services cannot scale horizontally |
-| Automatic deploy | Off until explicitly enabled |
+| Source | GitHub repository, branch main |
+| Compute | Render Free, one instance |
+| Build | npm ci --omit=dev && npm run check |
+| Start | node server.js |
+| Health check | /healthz |
+| Storage | External PostgreSQL through DATABASE_URL |
+| Local development | SQLite when DATABASE_URL is blank |
+| Automatic deploys | Off until deliberately enabled |
 
-The Blueprint selects paid compute because a free Render web service does not support a persistent disk. Review the current estimate and any available hackathon credits before applying it. A disk-backed deployment has a brief stop/start during deployment; it does not provide zero-downtime deploys.
+## Setup
 
-## Deployment sequence
+1. Create a **Free** Neon project without adding a card or selecting a paid plan. Keep its pooled PostgreSQL connection URL private.
+2. In Render, choose New → Blueprint and select this repository. Verify Free compute and no disk or paid database. If Render asks for a card, stop and inspect the selected configuration.
+3. Supply DATABASE_URL, GEMINI_API_KEY, PAYPAL_CLIENT_ID, and PAYPAL_CLIENT_SECRET through Render's secret environment configuration. Use Gemini's available free quota and PayPal sandbox credentials. No paid model fallback or live PayPal endpoint is configured.
+4. Render generates OWNER_SETUP_TOKEN and supplies RENDER_EXTERNAL_URL. The setup token is required only to create the first hosted account. It prevents an unrelated visitor from claiming the owner role.
+5. Deploy and confirm /healthz returns {"status":"ok"}. The server verifies database connectivity before becoming ready.
+6. Create the owner account yourself. Verify a project, saved analysis, proposal acceptance, and sandbox checkout. Verify saved data after a redeploy.
 
-1. Push the reviewed source, including `render.yaml`, to a Git repository that Render can access.
-2. In Render, choose **New → Blueprint** and select that repository. Review the workspace, region, compute plan, disk, and price before creating anything.
-3. Set `GEMINI_API_KEY`, `PAYPAL_CLIENT_ID`, and `PAYPAL_CLIENT_SECRET` through Render's secret environment configuration. Use sandbox PayPal credentials only. Do not upload `.env` or paste keys into GitHub files.
-4. Render generates `OWNER_SETUP_TOKEN`. It also supplies `RENDER_EXTERNAL_URL`, which the app uses for HTTPS host/origin checks. Use `PUBLIC_URL` only when intentionally configuring a different canonical HTTPS origin.
-5. Deploy, confirm `/healthz` returns `{"status":"ok"}`, and open the application. Create the first owner account yourself using the generated setup code. The code prevents an unrelated visitor from claiming the first owner account. It is not an account password.
-6. Test project creation, live AI analysis, proposal acceptance, and a sandbox checkout. Reopen the app after a redeploy to verify persistent records and account access.
+## Free-tier behavior
 
-## Existing local data
+Render Free sleeps after 15 minutes of inactivity; waking can take about a minute. Do not add artificial keepalive traffic. Usage limits may suspend the service. Free web services do not preserve SQLite files across sleeps/restarts and cannot use disks, so FREE_HOSTING=true refuses to start without DATABASE_URL.
 
-Local data is deliberately excluded from the repository. A fresh disk starts with a fresh workspace. Existing local users, password hashes, sessions, project records, and proposal tokens are not silently uploaded.
+Neon Free has no trial expiration and requires no card. Compute and storage quotas apply: exhausting them can suspend compute or reject writes until capacity is available. Keep both accounts on Free plans. Render's own free Postgres is not used because it expires after 30 days.
 
-If migrating the local installation, agree on a private transfer procedure first. Run `npm run db:backup` to create an integrity-checked SQLite snapshot. Restore it to the persistent directory while the target application is stopped and before creating a new cloud owner. Never copy only an active `.db` file and omit its WAL, commit a database to Git, or overwrite an active cloud database.
+## Local work and backups
 
-On Render, `npm run db:backup` writes an SQLite-native snapshot under `/var/data/backups`. Download copies securely to another location; backups on the same disk are not disaster recovery. Do not use a filesystem snapshot as the sole recovery mechanism for an active database.
+Existing local accounts, sessions, projects, and payments remain in SQLite and are not automatically uploaded. A fresh Neon project starts empty. Transfer local data only through an explicitly authorized private migration, never through GitHub.
 
-## Limits
+npm run db:backup backs up local SQLite only. It refuses to claim a PostgreSQL backup when DATABASE_URL is set. Cloud data needs a private PostgreSQL-native export or an available Neon snapshot. Keep recovery copies outside the running service.
 
-The current payment protections assume one Node process. Status reconciliation uses automatic polling, not verified PayPal webhooks, and does not reconcile later refunds or disputes. API keys and the sandbox merchant are shared by the installation; this is not multi-merchant onboarding. Email verification, password recovery by email, distributed abuse controls, and a production payment launch remain separate work.
+The app shares one sandbox merchant. Verified PayPal webhooks, later refund/dispute reconciliation, email verification, and email-based password recovery are not implemented. PostgreSQL does not itself provide multi-instance payment coordination; this deployment stays single-instance.
 
-## Official references
+## References
 
-- [Render web services](https://render.com/docs/web-services)
+- [Render Free limits](https://render.com/docs/free)
+- [Neon Free pricing](https://neon.com/pricing)
+- [Neon usage limits](https://neon.com/docs/introduction/plans)
 - [Blueprint specification](https://render.com/docs/blueprint-spec)
-- [Persistent disks](https://render.com/docs/disks)
-- [Node.js versions](https://render.com/docs/node-version)
