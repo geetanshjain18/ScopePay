@@ -15,6 +15,13 @@ ScopePay compares a client request with the original agreement, shows exact evid
 - Automatic payment confirmation and workspace updates while visible, with cross-tab notifications and focus recovery.
 - A responsive interface with light/dark themes, a landing-page orbit illustration, project history, and account export.
 
+## Live demo
+
+- [Hosted application](https://scopepay.onrender.com)
+- [Public demonstration video (2:17)](https://www.youtube.com/watch?v=73wFwPnuVLs)
+
+Create a normal account through Get started; no Render account or owner setup token is needed after installation. Free hosting can take a minute to wake. The video shows a hosted $75 proposal; its labelled $60 payment screenshots are an earlier local sandbox test, not a capture of that hosted proposal.
+
 ## Run locally
 
 Requires **Node.js 24**. The hosted PostgreSQL adapter uses node-postgres. There is no frontend build step.
